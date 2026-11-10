@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:">
+  <title>Protokoll-EL</title>
+  <link rel="stylesheet" href="../node_modules/katex/dist/katex.min.css">
+  <link rel="stylesheet" href="styles/document.css">
+  <link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+  <header class="toolbar">
+    <div class="brand">Protokoll<span>EL</span></div>
+    <button data-action="new" title="Neues Protokoll aus Vorlage (Strg+N)">Neu</button>
+    <button data-action="open" title="Protokoll öffnen (Strg+O)">Öffnen</button>
+    <button data-action="save" title="Speichern (Strg+S) – Speichern unter: Strg+Umschalt+S">Speichern</button>
+    <span class="sep"></span>
+    <button data-action="kicad" title="Schaltplan, Layout und Stückliste aus einem KiCad-Projekt übernehmen">KiCad-Import</button>
+    <button data-action="check" title="Prüfen, ob etwas fehlt">Check</button>
+    <span class="sep"></span>
+    <button data-action="pdf" class="primary" title="Als PDF exportieren (Strg+P)">PDF exportieren</button>
+    <button data-action="html" title="Als eigenständige HTML-Datei exportieren">HTML</button>
+    <span class="spacer"></span>
+    <span id="file-status"></span>
+    <button data-action="saveTemplate" title="Aktuelles Protokoll als eigene Vorlage speichern">Als Vorlage</button>
+    <button data-action="profile" title="Name, Klasse und Schule einmalig hinterlegen">Profil</button>
+  </header>
+
+  <main>
+    <section id="editor-pane" aria-label="Editor">
+      <div id="editor"></div>
+    </section>
+    <section id="preview-pane" aria-label="Vorschau">
+      <div id="paper"></div>
+    </section>
+  </main>
+
+  <dialog id="dlg"></dialog>
+  <div id="toast" hidden></div>
+
+  <script src="../node_modules/marked/lib/marked.umd.js"></script>
+  <script src="../node_modules/katex/dist/katex.min.js"></script>
+  <script src="js/templates.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

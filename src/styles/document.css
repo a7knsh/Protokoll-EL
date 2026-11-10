@@ -1,0 +1,90 @@
+/* Aussehen des Protokolls – gilt für Vorschau, PDF- und HTML-Export. */
+.doc {
+  font-family: "Segoe UI", "Helvetica Neue", Arial, "Liberation Sans", "DejaVu Sans", sans-serif;
+  font-size: 11pt;
+  line-height: 1.45;
+  color: #111;
+  overflow-wrap: break-word;
+}
+.doc * { box-sizing: border-box; }
+.doc p { margin: 0 0 .7em; }
+.doc ul, .doc ol { margin: 0 0 .7em; padding-left: 1.6em; }
+.doc a { color: #1d4ed8; text-decoration: none; }
+.doc code { font-family: Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace; font-size: .92em; }
+.doc .b-text code { background: #f1f1f3; padding: 0 .25em; border-radius: 3px; }
+.doc .b-text pre { background: #f6f6f8; border: 1px solid #ddd; padding: .6em .8em; white-space: pre-wrap; }
+.doc .b-text pre code { background: none; padding: 0; }
+.doc .b-text table { border-collapse: collapse; margin: 0 0 .7em; }
+.doc .b-text th, .doc .b-text td { border: 1px solid #777; padding: .2em .6em; }
+.doc blockquote { margin: 0 0 .7em; padding-left: 1em; border-left: 3px solid #bbb; color: #444; }
+.doc h3 { font-size: 12pt; margin: 1em 0 .4em; }
+.doc h4 { font-size: 11pt; margin: .9em 0 .3em; }
+
+/* Deckblatt */
+.doc .titlepage {
+  min-height: 236mm;
+  display: flex;
+  flex-direction: column;
+  break-after: page;
+  page-break-after: always;
+}
+.doc .tp-school { font-size: 13pt; font-weight: 600; text-align: center; border-bottom: 2px solid #111; padding-bottom: 4mm; min-height: 12mm; }
+.doc .tp-school span { font-weight: 400; font-size: 11pt; }
+.doc .tp-main { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: center; padding: 10mm 0; }
+.doc .tp-type { font-size: 15pt; letter-spacing: .12em; text-transform: uppercase; color: #333; }
+.doc .tp-title { font-size: 28pt; line-height: 1.2; margin: 6mm 0 0; font-weight: 700; }
+.doc .tp-meta { width: 100%; border-collapse: collapse; }
+.doc .tp-meta th, .doc .tp-meta td { border: 1px solid #555; padding: 2mm 3mm; text-align: left; vertical-align: top; }
+.doc .tp-meta th { width: 34%; background: #eee; font-weight: 600; }
+.doc .tp-grade { width: 100%; border-collapse: collapse; margin-top: 6mm; }
+.doc .tp-grade th { border: 1px solid #555; background: #eee; padding: 1.5mm 3mm; text-align: left; font-weight: 600; font-size: 10pt; }
+.doc .tp-grade td { border: 1px solid #555; height: 16mm; }
+.doc .tp-grade th:first-child { width: 20%; }
+.doc .tp-grade th:nth-child(2) { width: 25%; }
+
+.doc .compact-head { border-bottom: 2px solid #111; margin-bottom: 6mm; padding-bottom: 3mm; }
+.doc .compact-head .tp-type { font-size: 10pt; }
+.doc .compact-head .tp-title { font-size: 20pt; margin: 1mm 0 2mm; }
+.doc .compact-meta { color: #333; }
+
+/* Inhaltsverzeichnis */
+.doc .toc { break-after: page; page-break-after: always; margin-bottom: 8mm; }
+.doc .toc h2 { font-size: 15pt; margin: 0 0 4mm; }
+.doc .toc ol { list-style: none; padding: 0; margin: 0; }
+.doc .toc li { padding: 1.2mm 0; border-bottom: 1px dotted #999; }
+.doc .toc a { color: inherit; }
+.doc .toc-n { display: inline-block; width: 9mm; font-weight: 600; }
+
+/* Abschnitte */
+.doc .sec { margin-bottom: 6mm; }
+.doc .sec > h2 { font-size: 15pt; margin: 0 0 3mm; padding-bottom: 1mm; border-bottom: 1px solid #999; break-after: avoid; page-break-after: avoid; }
+.doc .sec-n { display: inline-block; min-width: 9mm; }
+
+/* Bilder, Tabellen, Listings, Formeln */
+.doc figure { margin: 4mm 0 5mm; }
+.doc figcaption { font-size: 9.5pt; color: #222; }
+.doc .b-image { text-align: center; break-inside: avoid; page-break-inside: avoid; }
+.doc .b-image img { max-width: 100%; max-height: 190mm; object-fit: contain; }
+.doc .b-image figcaption { margin-top: 1.5mm; }
+.doc .b-chart .chart { width: 88%; height: auto; }
+
+.doc .b-table figcaption, .doc .b-code figcaption { margin-bottom: 1.5mm; break-after: avoid; page-break-after: avoid; }
+.doc .b-table table { border-collapse: collapse; width: 100%; font-size: 10pt; }
+.doc .b-table th, .doc .b-table td { border: 1px solid #555; padding: 1.2mm 2.5mm; text-align: left; vertical-align: top; }
+.doc .b-table th { background: #e8e8ea; font-weight: 600; }
+.doc .b-table tr { break-inside: avoid; page-break-inside: avoid; }
+.doc .b-table thead { display: table-header-group; }
+
+.doc .b-code pre { margin: 0; background: #f6f6f8; border: 1px solid #ccc; border-left: 3px solid #555; padding: 2mm 3mm; font-size: 9pt; line-height: 1.4; white-space: pre-wrap; tab-size: 4; }
+.doc .b-code .ln { display: inline-block; width: 2.6em; margin-right: .8em; text-align: right; color: #888; user-select: none; }
+
+.doc .b-formula { display: grid; grid-template-columns: 1fr auto; align-items: center; margin: 3mm 0 4mm; break-inside: avoid; page-break-inside: avoid; }
+.doc .b-formula .eq { text-align: center; font-size: 12pt; overflow-x: auto; overflow-y: hidden; }
+.doc .b-formula .eq .katex-display { margin: .3em 0; }
+.doc .b-formula .eq-no { color: #333; padding-left: 4mm; }
+.doc .b-formula .eq-cap { grid-column: 1 / -1; text-align: center; font-size: 9.5pt; color: #333; }
+.doc .math-error { color: #b91c1c; }
+
+@media print {
+  .doc .b-formula .eq { overflow: visible; }
+}
