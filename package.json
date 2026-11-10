@@ -1,0 +1,56 @@
+{
+  "name": "protokoll-el",
+  "version": "0.1.0",
+  "description": "Protokoll-Assistent für HTL-Schüler (Elektronik und Technische Informatik)",
+  "main": "main.js",
+  "author": "Protokoll-EL",
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/run.js",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
+  },
+  "dependencies": {
+    "katex": "^0.19.1",
+    "marked": "^18.2.0"
+  },
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "at.protokoll-el.app",
+    "productName": "Protokoll-EL",
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*"
+    ],
+    "fileAssociations": [
+      {
+        "ext": "protokoll",
+        "name": "Protokoll-EL Dokument",
+        "role": "Editor"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "tar.gz"
+      ],
+      "category": "Education"
+    }
+  }
+}
