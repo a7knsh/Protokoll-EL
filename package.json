@@ -43,14 +43,18 @@
     "nsis": {
       "oneClick": false,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-${version}-Setup.${ext}"
     },
     "linux": {
       "target": [
-        "AppImage",
-        "tar.gz"
+        "AppImage"
       ],
-      "category": "Education"
+      "category": "Education",
+      "artifactName": "${productName}-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
     }
   }
 }

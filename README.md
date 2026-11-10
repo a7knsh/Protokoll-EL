@@ -36,11 +36,11 @@ npm start
 
 ```bash
 npm run dist:win     # Windows: Installer und portable .exe  (auf Windows ausführen)
-npm run dist:linux   # Linux: AppImage und tar.gz            (auf Linux ausführen)
+npm run dist:linux   # Linux: AppImage                       (auf Linux ausführen)
 ```
 
 Die Dateien liegen danach im Ordner `dist/`. Alternativ baut GitHub beide Varianten:
-unter **Actions → Build → Run workflow** (oder automatisch bei einem Tag wie `v0.1.0`).
+der Workflow „Build und Release“ legt `.exe` und `.AppImage` unter **Releases** ab, sobald sich die Versionsnummer in `package.json` ändert.
 
 ## Tastenkürzel
 
