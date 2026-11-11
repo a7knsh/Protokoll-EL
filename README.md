@@ -19,6 +19,7 @@ ihre Protokolle schneller schreiben: Vorlage wählen, Abschnitte ausfüllen, als
   Schaltplan (alle Blätter), Layout Ober- und Unterseite, zusammengefasste Stückliste und Platinendaten
   (Lagen, Größe, Leiterbahnbreiten). Ab KiCad 8 zusätzlich ERC-/DRC-Bericht, ab KiCad 9 die 3D-Ansicht.
   Ein erneuter Import aktualisiert die Inhalte. Voraussetzung: KiCad 7 oder neuer ist installiert.
+- **Dunkles Design:** per Knopf (🌙) in der Werkzeugleiste umschaltbar, folgt sonst der Systemeinstellung. Das Protokoll selbst bleibt weiß.
 - **Profil:** Name, Klasse, Schule einmal eintragen – stehen dann auf jedem Deckblatt.
 - **Vollständigkeits-Check:** zeigt fehlende Kopfdaten, leere Abschnitte, Bilder/Tabellen ohne Beschriftung.
 - **Eigene Vorlagen:** ein fertiges Protokoll als Vorlage speichern, z. B. wenn ein Lehrer einen eigenen Aufbau verlangt.

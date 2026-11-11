@@ -96,6 +96,13 @@ const stubSave = (app, file) => app.evaluate(({ dialog }, f) => {
 
   await page.screenshot({ path: path.join(out, 'app.png') });
 
+  // Dunkles Design: umschalten, bleibt nach Neustart erhalten; das Papier bleibt weiß.
+  await page.click('[data-theme-toggle]');
+  assert.strictEqual(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
+  assert.strictEqual(await page.evaluate(() => getComputedStyle(document.querySelector('#paper')).backgroundColor), 'rgb(255, 255, 255)');
+  assert.notStrictEqual(await page.evaluate(() => getComputedStyle(document.querySelector('.card')).backgroundColor), 'rgb(255, 255, 255)');
+  await page.screenshot({ path: path.join(out, 'app-dark.png') });
+
   // Speichern, PDF, HTML.
   await stubSave(app, docFile);
   await page.click('[data-action="save"]');
@@ -124,6 +131,7 @@ const stubSave = (app, file) => app.evaluate(({ dialog }, f) => {
   ({ app, page } = await launch(userData, [docFile]));
   await page.waitForSelector('[data-meta="titel"]');
   assert.strictEqual(await page.inputValue('[data-meta="titel"]'), 'Diodenkennlinie <b>Test</b>');
+  assert.strictEqual(await page.evaluate(() => document.documentElement.dataset.theme), 'dark', 'Design bleibt gespeichert');
   assert.strictEqual(await page.locator('.block[data-type="image"]').count(), 1);
   assert.strictEqual(await page.locator('#paper .chart').count(), 1);
   await page.click('[data-action="new"]');
