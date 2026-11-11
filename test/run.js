@@ -139,6 +139,43 @@ const stubSave = (app, file) => app.evaluate(({ dialog }, f) => {
     await page.waitForFunction(() => document.querySelectorAll('#paper .sec').length >= 3);
     if (id === 'kicad') await page.screenshot({ path: path.join(out, 'kicad.png') });
   }
+
+  // KiCad-Import mit einem echten Projekt (nur wenn KICAD_TEST_PROJECT auf eine .kicad_pro-Datei zeigt).
+  const kicadProject = process.env.KICAD_TEST_PROJECT;
+  if (kicadProject) {
+    await page.click('[data-action="new"]');
+    await page.click('[data-template="kicad"]');
+    await app.evaluate(({ dialog }, f) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] }); }, kicadProject);
+    const importOnce = async () => {
+      await page.click('[data-action="kicad"]');
+      await page.waitForFunction(() => document.querySelector('#dlg').open && document.querySelector('#dlg .dlg-body').textContent.includes('übernommen'), null, { timeout: 180000 });
+      await page.waitForFunction(() => document.querySelector('#toast').hidden);
+      const text = await page.locator('#dlg .dlg-body').textContent();
+      await page.click('#dlg button.primary');
+      return text;
+    };
+    console.log('KiCad-Import:', await importOnce());
+    const count = async () => ({
+      images: await page.locator('.block[data-type="image"]').count(),
+      tables: await page.locator('#paper .b-table').count(),
+    });
+    const first = await count();
+    assert.ok(first.images >= 3, 'Schaltplan und beide Layout-Seiten importiert');
+    assert.ok((await page.locator('#paper').textContent()).includes('Stückliste „'), 'Stückliste importiert');
+    assert.ok((await page.locator('#paper').textContent()).includes('Kupferlagen'), 'Platinendaten importiert');
+    const second = await importOnce();
+    assert.ok(second.includes('ersetzt'), 'zweiter Import ersetzt den ersten');
+    assert.deepStrictEqual(await count(), first, 'kein doppelter Inhalt nach erneutem Import');
+    const kicadPdf = path.join(out, 'kicad.pdf');
+    await stubSave(app, kicadPdf);
+    await page.click('[data-action="pdf"]');
+    await page.waitForFunction(() => document.querySelector('#toast')?.textContent.includes('PDF gespeichert'), null, { timeout: 60000 });
+    assert.ok(fs.statSync(kicadPdf).size > 50000);
+    const text = await page.locator('#paper').textContent();
+    if (process.env.KICAD_EXPECT) for (const part of process.env.KICAD_EXPECT.split('|')) assert.ok(text.includes(part), `Vorschau enthält „${part}“`);
+    await page.screenshot({ path: path.join(out, 'kicad-import.png') });
+  }
+  await page.evaluate(() => window.api.setDirty(false)); // sonst fragt die App beim Beenden nach
   await app.close();
 
   console.log('OK – alle Prüfungen bestanden. Ausgaben in', out);

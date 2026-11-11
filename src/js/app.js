@@ -604,12 +604,12 @@
   }
 
   let toastTimer = null;
-  function toast(text, action) {
+  function toast(text, action, sticky) {
     const el = $('#toast');
     el.replaceChildren(h('span', null, text), action ? h('button', { onclick: action.run }, action.label) : null);
     el.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { el.hidden = true; }, action ? 7000 : 3500);
+    if (!sticky) toastTimer = setTimeout(() => { el.hidden = true; }, action ? 7000 : 3500);
   }
 
   // ------------------------------------------------------------ Vorlagen- und Profil-Dialog
@@ -748,43 +748,90 @@
     return s;
   }
 
+  // Entfernt alles, was ein früherer KiCad-Import eingefügt hat, damit ein erneuter Import aktualisiert statt verdoppelt.
+  function removeKicadBlocks() {
+    let removed = 0;
+    for (const s of state.doc.sections) {
+      const keep = s.blocks.filter((b) => !(b.kicad && (b.type !== 'text' || b.md === b.kicadText)));
+      removed += s.blocks.length - keep.length;
+      s.blocks = keep;
+    }
+    return removed;
+  }
+
+  function checkSummary(checks) {
+    const n = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+    return checks.map((c) => {
+      const name = c.kind === 'ERC' ? 'Der ERC (elektrische Regelprüfung des Schaltplans)' : 'Der DRC (Design-Regelprüfung des Layouts)';
+      if (!c.errors && !c.warnings) return `${name} meldet keine Fehler und keine Warnungen.`;
+      return `${name} meldet ${n(c.errors, 'Fehler', 'Fehler')} und ${n(c.warnings, 'Warnung', 'Warnungen')}` +
+        (c.unconnected ? `, davon ${n(c.unconnected, 'nicht verbundene Leitung', 'nicht verbundene Leitungen')}` : '') + '.';
+    }).join('\n\n');
+  }
+
   async function kicadImport() {
     let res;
-    try { res = await api.kicadImport(); } catch (e) { return messageBox('KiCad-Import fehlgeschlagen', String(e.message || e)); }
+    toast('KiCad-Projekt wählen – danach wird automatisch geplottet, das dauert einige Sekunden …', null, true);
+    try { res = await api.kicadImport(); } catch (e) { return messageBox('KiCad-Import fehlgeschlagen', String(e.message || e)); } finally { $('#toast').hidden = true; }
     if (!res) return;
     if (res.noCli) {
       return messageBox('KiCad wurde nicht gefunden', [
-        'Für den automatischen Import wird das Programm „kicad-cli“ benötigt (ab KiCad 7 dabei, Stückliste ab KiCad 8). Es wurde auf diesem Rechner nicht gefunden.',
-        'So geht es von Hand:',
+        'Zum automatischen Plotten nutzt Protokoll-EL das Programm „kicad-cli“, das mit KiCad (ab Version 7) mitinstalliert wird. Auf diesem Rechner wurde es nicht gefunden.',
+        'Installiere KiCad von kicad.org und starte den Import noch einmal. Bis dahin geht es von Hand:',
         h('ul', null,
-          h('li', null, 'Schaltplan/Layout: in KiCad „Datei → Plotten“ als SVG ausgeben und hier mit „+ Bild“ einfügen – oder einfach einen Screenshot mit Strg+V einfügen.'),
-          h('li', null, 'Stückliste: in KiCad „Werkzeuge → Stückliste erzeugen“ als CSV speichern und in der Tabelle „CSV importieren“ wählen.')),
+          h('li', null, 'Schaltplan/Layout: einen Screenshot mit Strg+V einfügen oder in KiCad „Datei → Plotten“ als SVG ausgeben und mit „+ Bild“ einfügen.'),
+          h('li', null, 'Stückliste: in KiCad als CSV speichern und in der Tabelle „CSV importieren“ wählen.')),
       ]);
     }
 
-    let count = 0;
+    const replaced = removeKicadBlocks();
+    const schaltplan = () => findSection('schaltplan', /schaltplan|schaltung/i, 'Schaltplan');
+    const layout = () => findSection('layout', /layout|leiterplatte|platine/i, 'Leiterplattenlayout');
+
+    let images = 0;
     for (const img of res.images) {
       if (!img.dataUrl) continue;
-      const s = img.section === 'layout'
-        ? findSection('layout', /layout|leiterplatte|platine/i, 'Leiterplattenlayout')
-        : findSection('schaltplan', /schaltplan|schaltung/i, 'Schaltplan');
-      s.blocks.push({ id: uid(), type: 'image', src: img.dataUrl, caption: img.caption, width: 100 });
-      count++;
+      (img.section === 'layout' ? layout() : schaltplan()).blocks.push(
+        { id: uid(), type: 'image', src: img.dataUrl, caption: img.caption, width: img.width || 100, kicad: true });
+      images++;
     }
-    let bomRows = 0;
-    if (res.bom) {
-      const rows = parseDelimited(res.bom);
-      if (rows.length > 1) {
-        bomRows = rows.length - 1;
-        const s = findSection('bom', /stückliste|bauteilliste|bom/i, 'Stückliste');
-        const empty = s.blocks.find((b) => b.type === 'table' && R.isBlockEmpty(b));
-        if (empty) empty.rows = rows;
-        else s.blocks.push({ id: uid(), type: 'table', caption: `Stückliste „${res.project}“`, rows, chart: false });
+
+    const putTable = (section, caption, rows, isPlaceholder) => {
+      const block = { id: uid(), type: 'table', caption, rows, chart: false, kicad: true };
+      const at = section.blocks.findIndex((b) => b.type === 'table' && isPlaceholder(b));
+      if (at >= 0) section.blocks[at] = block; else section.blocks.push(block);
+    };
+    const bomRows = res.bom ? res.bom.length - 1 : 0;
+    if (bomRows) {
+      putTable(findSection('bom', /stückliste|bauteilliste|bom/i, 'Stückliste'), `Stückliste „${res.project}“`, res.bom, R.isBlockEmpty);
+    }
+    if (res.rules) {
+      putTable(layout(), 'Design-Regeln und Platinendaten', res.rules,
+        (b) => b.caption === 'Design-Regeln' && b.rows.slice(1).every((r) => !String(r[1] || '').trim()));
+    }
+
+    if (res.checks.length) {
+      const s = findSection('checks', /erc|drc|design-check/i, 'Design-Checks (ERC / DRC)');
+      const md = checkSummary(res.checks);
+      const placeholder = s.blocks.findIndex((b) => b.type === 'text' && !String(b.md || '').trim());
+      const text = { id: uid(), type: 'text', md, kicad: true, kicadText: md };
+      if (placeholder >= 0) s.blocks[placeholder] = text; else s.blocks.unshift(text);
+      const rows = res.checks.flatMap((c) => c.rows);
+      if (rows.length) {
+        const MAX = 40;
+        const shown = rows.slice(0, MAX);
+        if (rows.length > MAX) shown.push(['…', '', `${rows.length - MAX} weitere Meldungen (siehe KiCad)`, '']);
+        s.blocks.push({ id: uid(), type: 'table', caption: 'Meldungen aus ERC und DRC', rows: [['Prüfung', 'Art', 'Meldung', 'Betroffen'], ...shown], chart: false, kicad: true });
       }
     }
-    if (count || bomRows) structureChanged();
+
+    if (images || bomRows || res.rules || res.checks.length || replaced) structureChanged();
+    const parts = [`${images} Bild(er)`, `${bomRows} Stücklisten-Position(en)`];
+    if (res.rules) parts.push('Platinendaten');
+    for (const c of res.checks) parts.push(`${c.kind}-Bericht`);
     return messageBox('KiCad-Import', [
-      `Projekt „${res.project}“: ${count} Bild(er) und ${bomRows} Stücklisten-Zeile(n) übernommen.`,
+      `Projekt „${res.project}“${res.version ? ` (KiCad ${res.version})` : ''}: ${parts.join(', ')} übernommen.` +
+        (replaced ? ' Die Inhalte des früheren Imports wurden ersetzt.' : ''),
       ...res.messages,
     ]);
   }

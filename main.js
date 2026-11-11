@@ -307,11 +307,92 @@ function findKicadCli() {
 
 function run(cmd, args) {
   return new Promise((resolve, reject) => {
-    execFile(cmd, args, { timeout: 120000, windowsHide: true }, (err, stdout, stderr) => {
+    execFile(cmd, args, { timeout: 180000, windowsHide: true, maxBuffer: 32 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) reject(new Error((stderr || stdout || err.message).toString().trim().split('\n').slice(-3).join(' ')));
-      else resolve(stdout);
+      else resolve(String(stdout));
     });
   });
+}
+
+const fmtMm = (v) => (typeof v === 'number' && v > 0 ? String(Math.round(v * 1000) / 1000).replace('.', ',') + ' mm' : '');
+const xmlText = (s) => String(s || '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+
+// Stückliste aus dem XML-Netzlisten-Export (funktioniert ab KiCad 7): gleiche Bauteile werden zusammengefasst.
+function bomFromXml(xml) {
+  const groups = new Map();
+  for (const m of xml.matchAll(/<comp ref="([^"]+)">([\s\S]*?)<\/comp>/g)) {
+    const ref = xmlText(m[1]);
+    if (ref.startsWith('#')) continue;
+    const value = xmlText(/<value>([\s\S]*?)<\/value>/.exec(m[2])?.[1] || '');
+    const footprint = xmlText(/<footprint>([\s\S]*?)<\/footprint>/.exec(m[2])?.[1] || '').replace(/^[^:]*:/, '');
+    const key = value + '\u0000' + footprint;
+    if (!groups.has(key)) groups.set(key, { refs: [], value, footprint });
+    groups.get(key).refs.push(ref);
+  }
+  const natural = new Intl.Collator('de', { numeric: true }).compare;
+  const list = [...groups.values()];
+  list.forEach((g) => g.refs.sort(natural));
+  list.sort((a, b) => natural(a.refs[0], b.refs[0]));
+  if (!list.length) return null;
+  return [['Pos.', 'Referenz', 'Wert', 'Footprint', 'Anzahl'],
+    ...list.map((g, i) => [String(i + 1), g.refs.join(', '), g.value, g.footprint, String(g.refs.length)])];
+}
+
+// Kenndaten der Platine direkt aus den Projektdateien lesen (ohne kicad-cli).
+function boardFacts(proFile, pcbFile) {
+  const rows = [];
+  let pcb = '';
+  try { pcb = fs.readFileSync(pcbFile, 'utf8'); } catch { /* no board */ }
+  if (pcb) {
+    const copper = new Set([...pcb.slice(0, 20000).matchAll(/\(\d+\s+"?([\w.]+\.Cu)"?\s+(?:signal|power|mixed|jumper)/g)].map((m) => m[1]));
+    if (copper.size) rows.push(['Kupferlagen', String(copper.size)]);
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    // Nur Elemente der obersten Ebene (2 Leerzeichen bzw. 1 Tab eingerückt) – nicht die Grafik innerhalb von Pads/Footprints.
+    for (const m of pcb.matchAll(/\n(?: {2}|\t)\((gr_line|gr_rect|gr_arc|gr_poly|gr_circle)\s([\s\S]*?)\(layer\s+"?([\w.]+)"?\)/g)) {
+      if (m[3] !== 'Edge.Cuts' || /\((gr_|fp_|footprint|pad)\b/.test(m[2])) continue;
+      const pts = [...m[2].matchAll(/\((start|end|mid|center|xy)\s+(-?[\d.]+)\s+(-?[\d.]+)/g)].map((q) => [q[1], Number(q[2]), Number(q[3])]);
+      if (m[1] === 'gr_circle' && pts.length >= 2) {
+        const [, cx, cy] = pts[0];
+        const r = Math.hypot(pts[1][1] - cx, pts[1][2] - cy);
+        pts.length = 0;
+        pts.push(['', cx - r, cy - r], ['', cx + r, cy + r]);
+      }
+      for (const [, x, y] of pts) {
+        minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+      }
+    }
+    if (maxX > minX && maxY > minY) rows.push(['Platinengröße (ca.)', `${fmtMm(maxX - minX).replace(' mm', '')} × ${fmtMm(maxY - minY)}`]);
+  }
+  const pro = readJson(proFile, null);
+  const cls = pro?.net_settings?.classes?.[0] || {};
+  const rules = pro?.board?.design_settings?.rules || {};
+  const add = (label, value) => { if (fmtMm(value)) rows.push([label, fmtMm(value)]); };
+  add('Leiterbahnbreite (Standard)', cls.track_width);
+  add('Abstand (Standard)', cls.clearance);
+  if (fmtMm(cls.via_diameter)) rows.push(['Via (Durchmesser / Bohrung)', `${fmtMm(cls.via_diameter)} / ${fmtMm(cls.via_drill) || '–'}`]);
+  add('Min. Leiterbahnbreite', rules.min_track_width);
+  add('Min. Abstand', rules.min_clearance);
+  add('Min. Bohrdurchmesser', rules.min_through_hole_diameter);
+  return rows.length ? [['Regel', 'Wert'], ...rows] : null;
+}
+
+// ERC-/DRC-Bericht (JSON, ab KiCad 8) in Zahlen und Tabellenzeilen umwandeln.
+function summarizeReport(kind, report) {
+  const groups = kind === 'ERC'
+    ? [['', (report.sheets || []).flatMap((s) => s.violations || [])]]
+    : [['', report.violations || []], ['Nicht verbunden', report.unconnected_items || []], ['Schaltplan-Abgleich', report.schematic_parity || []]];
+  const out = { kind, errors: 0, warnings: 0, unconnected: (report.unconnected_items || []).length, rows: [] };
+  for (const [label, list] of groups) {
+    for (const v of list) {
+      const error = v.severity === 'error';
+      if (error) out.errors++; else out.warnings++;
+      const items = (v.items || []).map((i) => i.description).filter(Boolean).slice(0, 2).join('; ');
+      out.rows.push([kind, error ? 'Fehler' : 'Warnung', [label, v.description || v.type].filter(Boolean).join(': '), items]);
+    }
+  }
+  return out;
 }
 
 ipcMain.handle('kicad:import', async () => {
@@ -327,13 +408,18 @@ ipcMain.handle('kicad:import', async () => {
   const project = path.basename(base);
   const sch = base + '.kicad_sch';
   const pcb = base + '.kicad_pcb';
-  const result = { project, images: [], bom: null, messages: [] };
+  const result = { project, version: '', images: [], bom: null, rules: null, checks: [], messages: [] };
+
+  try { result.rules = boardFacts(base + '.kicad_pro', pcb); } catch { /* optional */ }
 
   const cli = findKicadCli();
   if (!cli) {
     result.noCli = true;
     return result;
   }
+  try { result.version = (await run(cli, ['version'])).trim().split(/\s+/)[0]; } catch { /* unknown version */ }
+  const major = parseInt(result.version, 10) || 0;
+  const note = (what, e) => result.messages.push(`${what}: ${e.message}`);
 
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'protokoll-el-kicad-'));
   try {
@@ -342,48 +428,81 @@ ipcMain.handle('kicad:import', async () => {
         const out = path.join(tmp, 'sch');
         fs.mkdirSync(out);
         await run(cli, ['sch', 'export', 'svg', '--output', out, sch]);
-        for (const f of fs.readdirSync(out).filter((f) => f.endsWith('.svg')).sort()) {
+        const files = fs.readdirSync(out).filter((f) => f.endsWith('.svg'));
+        // Hauptblatt zuerst, dann die Unterblätter.
+        files.sort((a, b) => (a === project + '.svg' ? -1 : b === project + '.svg' ? 1 : a.localeCompare(b)));
+        for (const f of files) {
           const name = path.basename(f, '.svg');
+          const sheet = name.startsWith(project + '-') ? name.slice(project.length + 1) : '';
           result.images.push({
             dataUrl: fileToDataUrl(path.join(out, f)),
-            caption: name === project ? `Schaltplan „${project}“` : `Schaltplan „${name}“`,
+            caption: sheet ? `Schaltplan „${project}“ – Blatt „${sheet}“` : `Schaltplan „${project}“`,
             section: 'schaltplan',
           });
         }
-      } catch (e) { result.messages.push('Schaltplan konnte nicht exportiert werden: ' + e.message); }
+      } catch (e) { note('Schaltplan konnte nicht geplottet werden', e); }
 
       try {
-        const out = path.join(tmp, 'bom.csv');
-        await run(cli, ['sch', 'export', 'bom', '--output', out,
-          '--fields', 'Reference,Value,Footprint,${QUANTITY}',
-          '--labels', 'Referenz,Wert,Footprint,Anzahl',
-          '--group-by', 'Value,Footprint', sch]);
-        result.bom = fs.readFileSync(out, 'utf8');
-      } catch (e) { result.messages.push('Stückliste konnte nicht exportiert werden (benötigt KiCad 8 oder neuer): ' + e.message); }
+        const out = path.join(tmp, 'bom.xml');
+        await run(cli, ['sch', 'export', 'python-bom', '--output', out, sch]);
+        result.bom = bomFromXml(fs.readFileSync(out, 'utf8'));
+      } catch (e) { note('Stückliste konnte nicht erzeugt werden', e); }
+
+      if (major >= 8) {
+        try {
+          const out = path.join(tmp, 'erc.json');
+          // kicad-cli meldet gefundene Verstöße je nach Version über den Rückgabewert – der Bericht zählt.
+          try { await run(cli, ['sch', 'erc', '--output', out, '--format', 'json', '--severity-all', sch]); } catch (e) { if (!fs.existsSync(out)) throw e; }
+          result.checks.push(summarizeReport('ERC', readJson(out, {})));
+        } catch (e) { note('ERC konnte nicht ausgeführt werden', e); }
+      }
     } else {
       result.messages.push('Keine Schaltplandatei (.kicad_sch) neben der gewählten Datei gefunden.');
     }
 
     if (fs.existsSync(pcb)) {
       const views = [
-        { layers: 'F.Cu,F.SilkS,Edge.Cuts', caption: `Layout „${project}“ – Oberseite (F.Cu)` },
-        { layers: 'B.Cu,B.SilkS,Edge.Cuts', caption: `Layout „${project}“ – Unterseite (B.Cu)` },
+        { layers: 'F.Cu,F.SilkS,Edge.Cuts', extra: [], caption: `Layout „${project}“ – Oberseite` },
+        { layers: 'B.Cu,B.SilkS,Edge.Cuts', extra: ['--mirror'], caption: `Layout „${project}“ – Unterseite (gespiegelt, von unten gesehen)` },
       ];
       for (const [i, v] of views.entries()) {
         const out = path.join(tmp, `pcb${i}.svg`);
         try {
           try {
-            await run(cli, ['pcb', 'export', 'svg', '--output', out, '--layers', v.layers,
+            await run(cli, ['pcb', 'export', 'svg', '--output', out, '--layers', v.layers, ...v.extra,
               '--page-size-mode', '2', '--exclude-drawing-sheet', pcb]);
           } catch {
             await run(cli, ['pcb', 'export', 'svg', '--output', out, '--layers', v.layers, pcb]);
           }
-          result.images.push({ dataUrl: fileToDataUrl(out), caption: v.caption, section: 'layout' });
-        } catch (e) { result.messages.push('Layout konnte nicht exportiert werden: ' + e.message); }
+          result.images.push({ dataUrl: fileToDataUrl(out), caption: v.caption, section: 'layout', width: 80 });
+        } catch (e) { note('Layout konnte nicht geplottet werden', e); }
+      }
+
+      if (major >= 9) {
+        for (const [side, label] of [['top', 'Oberseite'], ['bottom', 'Unterseite']]) {
+          const out = path.join(tmp, `3d-${side}.png`);
+          try {
+            await run(cli, ['pcb', 'render', '--output', out, '--side', side, '--width', '1600', '--height', '1100', pcb]);
+            result.images.push({ dataUrl: fileToDataUrl(out), caption: `3D-Ansicht „${project}“ – ${label}`, section: 'layout', width: 70 });
+          } catch (e) { note('3D-Ansicht konnte nicht erzeugt werden', e); }
+        }
+      }
+
+      if (major >= 8) {
+        try {
+          const out = path.join(tmp, 'drc.json');
+          try { await run(cli, ['pcb', 'drc', '--output', out, '--format', 'json', '--severity-all', '--schematic-parity', pcb]); } catch (e) {
+            if (!fs.existsSync(out)) await run(cli, ['pcb', 'drc', '--output', out, '--format', 'json', pcb]).catch((e2) => { if (!fs.existsSync(out)) throw e2; });
+          }
+          result.checks.push(summarizeReport('DRC', readJson(out, {})));
+        } catch (e) { note('DRC konnte nicht ausgeführt werden', e); }
       }
     } else {
       result.messages.push('Keine Leiterplattendatei (.kicad_pcb) neben der gewählten Datei gefunden.');
     }
+
+    if (major && major < 8) result.messages.push(`KiCad ${result.version} gefunden: ERC/DRC-Berichte gibt es automatisch erst ab KiCad 8, die 3D-Ansicht ab KiCad 9.`);
+    else if (major === 8) result.messages.push(`KiCad ${result.version} gefunden: Die 3D-Ansicht gibt es automatisch erst ab KiCad 9.`);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

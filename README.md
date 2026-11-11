@@ -15,8 +15,10 @@ ihre Protokolle schneller schreiben: Vorlage wählen, Abschnitte ausfüllen, als
 - **Bausteine:** Text (Markdown), Bilder (auch per Strg+V oder Drag & Drop), Tabellen, Code, Formeln (LaTeX, mit kleiner Formelsammlung).
 - **Messwerttabellen mit Diagramm:** Werte aus Excel/LibreOffice einfügen oder CSV importieren, Haken bei „Diagramm“ –
   die Kennlinie wird automatisch gezeichnet (auch logarithmisch, z. B. für Frequenzgänge).
-- **KiCad-Import:** Schaltplan, Layout (Ober-/Unterseite) und Stückliste direkt aus einem KiCad-Projekt übernehmen
-  (benötigt `kicad-cli`, das ab KiCad 7 mitinstalliert wird; Stückliste ab KiCad 8).
+- **KiCad-Import – nichts selbst plotten:** `.kicad_pro`-Datei wählen, den Rest macht das Programm:
+  Schaltplan (alle Blätter), Layout Ober- und Unterseite, zusammengefasste Stückliste und Platinendaten
+  (Lagen, Größe, Leiterbahnbreiten). Ab KiCad 8 zusätzlich ERC-/DRC-Bericht, ab KiCad 9 die 3D-Ansicht.
+  Ein erneuter Import aktualisiert die Inhalte. Voraussetzung: KiCad 7 oder neuer ist installiert.
 - **Profil:** Name, Klasse, Schule einmal eintragen – stehen dann auf jedem Deckblatt.
 - **Vollständigkeits-Check:** zeigt fehlende Kopfdaten, leere Abschnitte, Bilder/Tabellen ohne Beschriftung.
 - **Eigene Vorlagen:** ein fertiges Protokoll als Vorlage speichern, z. B. wenn ein Lehrer einen eigenen Aufbau verlangt.

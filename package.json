@@ -1,6 +1,6 @@
 {
   "name": "protokoll-el",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "description": "Protokoll-Assistent für HTL-Schüler (Elektronik und Technische Informatik)",
   "main": "main.js",
   "author": "Protokoll-EL",
